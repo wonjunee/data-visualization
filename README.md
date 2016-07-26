@@ -6,6 +6,9 @@
 
 This final project visualizes the data of US Airports flight information in 2008. The data is visualized by nodes and edges where nodes represent the airports and the edges represent the possible flight paths. 
 
+Go to the link below to see the visualization.
+- http://bl.ocks.org/wonjunee/b0e6efb6627bee41620711674a2e8652
+
 ### Design
 
 I used the US map as a background to show readers where exactly the airports are. The map is scaled so that the readers can see the nodes and edges clearly.
