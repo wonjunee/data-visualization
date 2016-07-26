@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+    <style>
+      circle {
+        fill: orange;
+        stroke: black;
+        stroke-width: 0.7;
+        opacity: 0.7;
+      }
+
+      
+
+      h2 {
+        text-align: center;
+        color: black;
+      }
+
+      h3 {
+        text-align: center;
+        color: black;
+      }
+
+      h4 {
+        display:block;
+        margin:auto;
+        /*top: 80px;
+        left: 160px;*/
+        width: 900px;
+        height: 100px;
+        padding: 5px;
+        text-align: left;
+        color: black;
+      }
+
+      div.days_buttons {
+        position: fixed;
+        top: 40px;
+        left: 50px;
+      }
+
+      div.days_buttons div {
+        background-color: rgb(251, 201, 127);
+        padding: 1px;
+        margin: 1px;
+      }
+
+      .node {
+          fill: orange;
+        stroke: black;
+        stroke-width: 0.7;
+        opacity: 0.7;
+      }
+
+      .tooltip {
+        position: absolute;
+        text-align: center;
+        width: 60px;
+        height: 24px;
+        padding: 8px;
+        margin-top: -20px;
+        font: 10px sans-serif;
+        background: #ddd;
+        pointer-events: none;
+        opacity: 0;
+      }
+
+      .link {
+          stroke: #777;
+      }
+    </style>
+    <script type="text/javascript">  
+        function draw(geo_data) {
+            "use strict";
+            var margin = 75,
+                width = 1400 - margin,
+                height = 600 - margin;
+
+            // Write down the header
+            d3.select("body")
+              .attr('class', 'header')
+              .append("h2")
+              .text("Visualization of Flight Paths of Airlines In US");
+
+
+            d3.select("body")
+              .append("h3")
+              .text("Flight Paths ");
+
+            // Write down the introduction
+            d3.select("body")
+              .append("h4")
+              .html("This visualization shows the possible routes of each airport on February 2008. Each circle represents the airports and each edge represent the flights between two airports. The size of the circle corresponds to the number of edges of that node and the width of the edge correspons to the number of flights between the two airports during February. Note that DEN has the greatest number of possible flights to different airports and many number of thick lines suggest it has the greatest number of flights. Other things to notice is that there are more flights to the neighbor airports than the airports far away.")
+
+            /* 
+            Set the body and the frame on which the visualization
+            is depicted
+            */
+
+            var svg = d3.select("body")
+                .append("svg")
+                .attr("width", width + margin)
+                .attr("height", height + margin)
+                .append('g')
+                .attr('class', 'map');
+            /* 
+            set the projection function that converts
+            the coordinates values to the pixel values.
+            */
+            var projection = d3.geo.mercator()
+                                   .scale(800)
+                                   .translate([width/.68, height / .65]);
+
+            var path = d3.geo.path().projection(projection);
+
+            // This will draw a background image (USA map)
+            var map = svg.selectAll('path')
+                         .data(geo_data.features)
+                         .enter()
+                         .append('path')
+                         .attr('d', path)
+                         .style('fill', function(d) {
+                              if (d.properties.name === "USA"){
+                                  return 'lightBlue';
+                              }
+                              return 'white';
+                         })
+                         .style('stroke', function(d) {
+                              if (d.properties.name === "USA"){
+                                  return "black";
+                              }
+                              return "white";
+                         })
+                         .style('stroke-width', 0.5);
+
+            // Define the div for the tooltip
+            var div = d3.select("body").append("div")
+                        .attr("class", "tooltip")
+                        .style("display", "none");
+            /*
+            Import nodes.csv file and save it as nodes
+            nodes array = [{x: , y: } , ... ]
+            code_to_ind = {LAS: 0, IND: 1, ... }
+            */
+            var nodes = [];
+            var code_edges = {};
+
+            d3.csv("nodes.csv", function(d) {
+                d.forEach(function(i) {
+                    var a = {};
+                    a.name = i.code;
+                    a.id = +i.id;
+                    a.x = +i.lon;
+                    a.y = +i.lat;
+                    a.fixed = true;
+                    nodes.push(a);
+                    code_edges[i.code] = +i.size;
+                });
+            });
+
+            function plot_points(data) {
+                // apply mercator function to nodes
+                nodes = nodes.map(function(d) {
+                    var a = projection([+d.x, +d.y]);
+                    d.x = a[0];
+                    d.y = a[1];
+                    return d;
+                });
+          
+                // Save key and the number of flights into separate dictionary
+                var DO_flights = {};
+                data.forEach(function(d) {
+                    DO_flights[d['source'] + " " + d['target']] = d['flights'];
+                });
+
+                // Create links array
+                var links = [];
+                data.forEach(function(i) {
+                    var a = {};
+                    a.source = +i.source;
+                    a.target = +i.target;
+                    links.push(a);
+                });
+                
+                // Find the maximum number of edges from code_edges dictionary
+                var edges_max = d3.max(Object.keys(code_edges), function(key){ 
+                                        return code_edges[key]; 
+                                      });
+                
+                // Set the radius
+                var radius = d3.scale.sqrt()
+                           .domain([0, edges_max])
+                           .range([0, 15]);
+
+                // Find the maximum number of flights
+                var flights_max = d3.max(data, function(d){ 
+                                        return d['flights']; 
+                                      });
+
+                // Set the widhts of edges
+                var width = d3.scale.linear()
+                           .domain([0, flights_max])
+                           .range([.5, 10]);
+
+                // Put legend for nodes
+                var legend = svg.append("g")
+                    .attr("class", "legend")
+                    .attr("transform", "translate(" + (width - 100) + "," + 20 + ")")
+                    .selectAll("g")
+                    .data([5, 10, 15, 20])
+                    .enter().append("g");
+
+                legend.append("circle")
+                    .attr("cx", 1080)
+                    .attr("cy", function(d, i) {
+                        return i * 30+10;
+                    })
+                    .attr("r", function(d) {
+                        return radius(d);
+                    });
+
+                legend.append("text")
+                    .attr("y", function(d, i) {
+                        return i * 30 + 5+10;
+                    })
+                    .attr("x", 1100)
+                    .text(function(d) {
+                        return d;
+                    });
+                    
+                // Put legend for edges
+                var legend2 = svg.append("g")
+                    .attr("class", "legend")
+                    .attr("transform", "translate(" + (width - 100) + "," + 20 + ")")
+                    .selectAll("g")
+                    .data([100, 500, 1000, 2000])
+                    .enter().append("g");
+
+                legend2.append("rect")
+                    .attr("x", 1060)
+                    .attr("y", function(d, i) {
+                        return i * 30+150;
+                    })
+                    .attr("width", 30)
+                    .attr("height", function(d) {
+                        return width(d);
+                    })
+                    .attr("fill", "#777");
+                    
+
+                legend2.append("text")
+                    .attr("y", function(d, i) {
+                        return i * 30 + 5+155;
+                    })
+                    .attr("x", 1100)
+                    .text(function(d) {
+                        return d;
+                    });
+
+                // Set the force layout with nodes and links
+                var force = d3.layout.force()
+                              .size([width+margin, height+margin])
+                              .nodes(nodes)
+                              .links(links)
+                              .distance(100)
+                              .start();
+
+                // Set the link and append line elements
+                var link = svg.selectAll('.link')
+                              .data(links)
+                              .enter().append('line')
+                              .attr('class', 'link')
+                              .attr("x1", function(d) { return d.source.x; })
+                              .attr("y1", function(d) { return d.source.y; })
+                              .attr("x2", function(d) { return d.target.x; })
+                              .attr("y2", function(d) { return d.target.y; });
+                
+                // Set the node and append circle elements 
+                var node = svg.selectAll('.node')
+                              .data(nodes)
+                              .enter().append('circle')
+                              .attr('class', 'node')
+                              .attr("r", function(d) {
+                                  return radius(code_edges[d.name]);
+                              })
+                              .on("mouseover", function(d) {   
+                                  div
+                                      .style("display", "inline")
+                                      .html("Airport: " + d.name + "<br/>" + code_edges[d.name] + " edges")  
+                                      .style("left", (d3.event.pageX+10) + "px")   
+                                      .style("top", (d3.event.pageY) + "px")
+                                      .transition().duration(200).style("opacity",.7);  
+                                  })          
+                              .on("mouseout", function(d) {   
+                                  div.transition().duration(200).style("opacity", 0); 
+                              });
+
+
+                // Draw nodes and links using tick function
+                force.stop();
+                tick();
+                force.on("tick", tick);
+
+                // tick function will attribute the data to the coordinates when called.
+                function tick() {
+                    link.attr("x1", function(d) { return d.source.x; })
+                        .attr("y1", function(d) { return d.source.y; })
+                        .attr("x2", function(d) { return d.target.x; })
+                        .attr("y2", function(d) { return d.target.y; })
+                        .attr("stroke-width", function(d) {
+                            return width(DO_flights[d.source.id+" "+d.target.id]);  
+                        })
+                        .attr("opacity", .7);
+
+                    node.attr("cx", function(d) { return d.x; })
+                        .attr("cy", function(d) { return d.y; });
+                }
+
+            // This function is used for animation
+            function update(Origin) {
+                // Create an empty array
+                var filtered = [];
+
+                // Will filter the data if they contain the Origin (input)
+                data.forEach(function(d) {
+                    if (d['Origin'] === Origin || d['Dest'] === Origin) {
+                        var a = {};
+                        a.target = d.target;
+                        a.source = d.source;
+                        filtered.push(a);
+                    };
+                });
+
+                // update the header
+                d3.select("h3")
+                  .text("Flight Paths From " + Origin);
+                
+                // before the links are linked with data, set opacity .1
+                d3.selectAll(".link")
+                      // .selectAll("line")
+                      .attr("opacity", .1);
+
+                // set the force layout
+                var force2 = d3.layout.force()
+                              .size([width+margin, height+margin])
+                              .nodes(nodes)
+                              .links(filtered)
+                              .distance(100)
+                              .start();
+
+                // set the line function that is linked to filtered data
+                var line2 = svg.selectAll('.link')
+                                .data(filtered);
+
+                // remove everything besides the filtered data
+                line2.exit().remove();
+
+                // Append the link class and line elements
+                line2.enter().append('line')
+                    .attr("x1", function(d) { return d.source.x; })
+                    .attr("y1", function(d) { return d.source.y; })
+                    .attr("x2", function(d) { return d.target.x; })
+                    .attr("y2", function(d) { return d.target.y; });
+
+                // set the node class and append circle elements
+                var circles = svg.selectAll('.node')
+                              .data(nodes)
+                              .enter()
+                              .append('circle')                     
+                              .attr('class', 'node')
+                              .attr("r", function(d) {
+                                  return radius(code_edges[d.name]);
+                              });
+                           
+                // Draw nodes and links using tick function
+                force2.stop();
+                tick2();
+                force2.on("tick", tick2);
+
+                /* 
+                tick2 function is same as tick function 
+                except it uses line2 and circles instaed of line and node
+                tick2 function will attribute the data 
+                to the coordinates when called.
+                */
+                function tick2() {
+                    line2.attr('class', 'link').attr("x1", function(d) { return d.source.x; })
+                        .attr("y1", function(d) { return d.source.y; })
+                        .attr("x2", function(d) { return d.target.x; })
+                        .attr("y2", function(d) { return d.target.y; })
+                        .transition()
+                        .duration(200)
+                        .attr("stroke-width", function(d) {
+                            return width(DO_flights[d.source.id + " " + d.target.id]); 
+
+                        })
+                        .attr("opacity", .7);
+
+                    circles.attr("cx", function(d) { return d.x; })
+                           .attr("cy", function(d) { return d.y; });
+                };
+            }
+
+            // Set the Origin index starting from 0
+            var Origin_idx = 0;
+
+            // Create an empty array of Origins
+            var Origins = [];
+
+            // Origins array will contain all the names of airports
+            nodes.forEach(function(d) {
+                Origins.push(d.name);
+            });
+
+            // Starting the visualization
+            var Origin_interval = setInterval(function() {
+                update(Origins[Origin_idx]);
+
+                Origin_idx++;
+
+                /*
+                if Origin index is greater then the total number
+                of airports then show the button boxes at the left hand side.
+                */
+                if(Origin_idx >= Origins.length) {
+                    clearInterval(Origin_interval);
+
+                    // Append the buttons at the left hand side
+                    var buttons = d3.select("body")
+                            .append("div")
+                            .attr("class", "days_buttons")
+                            .selectAll("div")
+                            .data(Origins)
+                            .enter()
+                            .append("div")
+                            .text(function(d) {
+                                return d;
+                            });
+
+                    /* 
+                    When click show some animations on button
+                    and show the node and its edges that is clicked.
+                    */
+                    buttons.on("click", function(d) {
+                        d3.select(".days_buttons")
+                          .selectAll("div")
+                          .transition()
+                          .duration(500)
+                          .style("color", "black")
+                          .style("background", "rgb(251, 201, 127)");
+
+                        d3.select(this)
+                          .transition()
+                          .duration(500)
+                          .style("background", "lightBlue")
+                          .style("color", "white");
+                        update(d);
+                    });
+
+                    /*
+                    when the nodes are clicked then it will behave
+                    in the same way the buttons are clicked.
+                    */ 
+                    node.on("click", function(d) {
+                        d3.select(".days_buttons")
+                          .selectAll("div")
+                          .transition()
+                          .duration(500)
+                          .style("color", "black")
+                          .style("background", "rgb(251, 201, 127)");
+
+                        d3.select(this);
+                        update(d.name);
+                    });
+                }
+            }, 500);
+        }
+
+        // import edges.csv file and run plot_points function
+        d3.csv("edges.csv", function(d) {
+            d['source'] = +d['source'];
+            d['target'] = +d['target'];
+            d['flights'] = +d['flights'];
+            return d;
+        }, plot_points);
+    };
+    </script>
+  </head>
+<body>
+  <script type="text/javascript">
+  /*
+    Use D3 to load the GeoJSON file
+    */
+    
+d3.json("world_countries.json", draw);
+  </script>
+</body>
+</html>
